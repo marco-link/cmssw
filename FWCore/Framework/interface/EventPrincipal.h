@@ -117,7 +117,8 @@ namespace edm {
 
     BranchListIndexes const& branchListIndexes() const;
 
-    Provenance getProvenance(ProductID const& pid, ModuleCallingContext const* mcc) const;
+    Provenance const& getProvenance(ProductID const& pid) const;
+    StableProvenance const& getStableProvenance(ProductID const& pid) const;
 
     BasicHandle getByProductID(ProductID const& oid) const;
 
@@ -137,6 +138,9 @@ namespace edm {
     void getThinnedProducts(ProductID const& pid,
                             std::vector<WrapperBase const*>& foundContainers,
                             std::vector<unsigned int>& keys) const override;
+    OptionalThinnedKey getThinnedKeyFrom(ProductID const& parent,
+                                         unsigned int key,
+                                         ProductID const& thinned) const override;
 
     ProductID branchIDToProductID(BranchID const& bid) const;
 
@@ -145,6 +149,7 @@ namespace edm {
     }
 
     using Base::getProvenance;
+    using Base::getStableProvenance;
 
   private:
     BranchID pidToBid(ProductID const& pid) const;

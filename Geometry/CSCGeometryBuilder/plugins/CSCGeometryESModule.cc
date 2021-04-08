@@ -128,9 +128,11 @@ CSCGeometryESModule::CSCGeometryESModule(const edm::ParameterSet& p)
   debugV_ = p.getUntrackedParameter<bool>("debugV", false);
 
   if (fromDDD_) {
-    cc.setConsumes(cpvToken_).setConsumes(mdcToken_);
+    cpvToken_ = cc.consumes();
+    mdcToken_ = cc.consumes();
   } else if (fromDD4hep_) {
-    cc.setConsumes(cpvTokendd4hep_).setConsumes(mdcToken_);
+    cpvTokendd4hep_ = cc.consumes();
+    mdcToken_ = cc.consumes();
   } else {
     rigToken_ = cc.consumesFrom<RecoIdealGeometry, CSCRecoGeometryRcd>(edm::ESInputTag{});
     rdpToken_ = cc.consumesFrom<CSCRecoDigiParameters, CSCRecoDigiParametersRcd>(edm::ESInputTag{});
@@ -203,6 +205,7 @@ std::shared_ptr<CSCGeometry> CSCGeometryESModule::produce(const MuonGeometryReco
 
 void CSCGeometryESModule::initCSCGeometry_(const MuonGeometryRecord& record, std::shared_ptr<HostType>& host) {
   if (fromDDD_) {
+    edm::LogVerbatim("CSCGeoemtryESModule") << "(0) CSCGeometryESModule  - DDD ";
     host->ifRecordChanges<IdealGeometryRecord>(record, [&host, &record, this](auto const& rec) {
       host->clear();
       edm::ESTransientHandle<DDCompactView> cpv = record.getTransientHandle(cpvToken_);
@@ -211,6 +214,7 @@ void CSCGeometryESModule::initCSCGeometry_(const MuonGeometryRecord& record, std
       builder.build(*host, cpv.product(), mdc);
     });
   } else if (fromDD4hep_) {
+    edm::LogVerbatim("CSCGeoemtryESModule") << "(0) CSCGeometryESModule  - DD4HEP ";
     host->ifRecordChanges<IdealGeometryRecord>(record, [&host, &record, this](auto const& rec) {
       host->clear();
       edm::ESTransientHandle<cms::DDCompactView> cpv = record.getTransientHandle(cpvTokendd4hep_);
@@ -226,8 +230,9 @@ void CSCGeometryESModule::initCSCGeometry_(const MuonGeometryRecord& record, std
 
     host->ifRecordChanges<CSCRecoDigiParametersRcd>(record,
                                                     [&recreateGeometry](auto const& rec) { recreateGeometry = true; });
-
+    edm::LogVerbatim("CSCGeoemtryESModule") << "(0) CSCGeometryESModule  - DB recreateGeometry=false ";
     if (recreateGeometry) {
+      edm::LogVerbatim("CSCGeoemtryESModule") << "(0) CSCGeometryESModule  - DB recreateGeometry=true ";
       host->clear();
       const auto& rig = record.get(rigToken_);
       const auto& rdp = record.get(rdpToken_);

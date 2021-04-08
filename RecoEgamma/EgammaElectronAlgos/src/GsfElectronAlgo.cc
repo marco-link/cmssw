@@ -23,7 +23,9 @@
 #include "RecoEgamma/EgammaElectronAlgos/interface/ElectronMomentumCorrector.h"
 #include "RecoEgamma/EgammaElectronAlgos/interface/ElectronUtilities.h"
 #include "RecoEgamma/EgammaElectronAlgos/interface/GsfElectronAlgo.h"
+#include "RecoEgamma/EgammaElectronAlgos/interface/ecalClusterEnergyUncertaintyElectronSpecific.h"
 #include "CommonTools/Egamma/interface/ConversionTools.h"
+#include "RecoEgamma/EgammaTools/interface/EgammaLocalCovParamDefaults.h"
 
 #include <Math/Point3D.h>
 #include <memory>
@@ -291,7 +293,8 @@ reco::GsfElectron::ShowerShape GsfElectronAlgo::calculateShowerShape(const reco:
                                                                      ElectronHcalHelper const& hcalHelper,
                                                                      EventData const& eventData,
                                                                      CaloTopology const& topology,
-                                                                     CaloGeometry const& geometry) const {
+                                                                     CaloGeometry const& geometry,
+                                                                     EcalPFRecHitThresholds const& thresholds) const {
   using ClusterTools = EcalClusterToolsT<full5x5>;
   reco::GsfElectron::ShowerShape showerShape;
 
@@ -313,8 +316,19 @@ reco::GsfElectron::ShowerShape GsfElectronAlgo::calculateShowerShape(const reco:
     recHitSeverityToBeExcluded = cfg_.recHits.recHitSeverityToBeExcludedEndcaps;
   }
 
-  std::vector<float> covariances = ClusterTools::covariances(seedCluster, recHits, &topology, &geometry);
-  std::vector<float> localCovariances = ClusterTools::localCovariances(seedCluster, recHits, &topology);
+  const auto& covariances = ClusterTools::covariances(seedCluster, recHits, &topology, &geometry);
+
+  // do noise-cleaning for full5x5, by passing per crystal PF recHit thresholds and mult values
+  // mult values for EB and EE were obtained by dedicated studies
+  const auto& localCovariances = full5x5 ? ClusterTools::localCovariances(seedCluster,
+                                                                          recHits,
+                                                                          &topology,
+                                                                          EgammaLocalCovParamDefaults::kRelEnCut,
+                                                                          &thresholds,
+                                                                          cfg_.cuts.multThresEB,
+                                                                          cfg_.cuts.multThresEE)
+                                         : ClusterTools::localCovariances(seedCluster, recHits, &topology);
+
   showerShape.sigmaEtaEta = sqrt(covariances[0]);
   showerShape.sigmaIetaIeta = sqrt(localCovariances[0]);
   if (!edm::isNotFinite(localCovariances[2]))
@@ -370,7 +384,6 @@ GsfElectronAlgo::GsfElectronAlgo(const Tokens& input,
                                  const ElectronHcalHelper::Configuration& hcal,
                                  const IsolationConfiguration& iso,
                                  const EcalRecHitsConfiguration& recHits,
-                                 std::unique_ptr<EcalClusterFunctionBaseClass>&& superClusterErrorFunction,
                                  std::unique_ptr<EcalClusterFunctionBaseClass>&& crackCorrectionFunction,
                                  const RegressionHelper::Configuration& reg,
                                  const edm::ParameterSet& tkIsol03,
@@ -383,27 +396,22 @@ GsfElectronAlgo::GsfElectronAlgo(const Tokens& input,
       tkIsol04CalcCfg_(tkIsol04),
       tkIsolHEEP03CalcCfg_(tkIsolHEEP03),
       tkIsolHEEP04CalcCfg_(tkIsolHEEP04),
-      magneticFieldToken_{cc.esConsumes<MagneticField, IdealMagneticFieldRecord>()},
-      caloGeometryToken_{cc.esConsumes<CaloGeometry, CaloGeometryRecord>()},
-      caloTopologyToken_{cc.esConsumes<CaloTopology, CaloTopologyRecord>()},
-      trackerGeometryToken_{cc.esConsumes<TrackerGeometry, TrackerDigiGeometryRecord>()},
-      ecalSeveretyLevelAlgoToken_{cc.esConsumes<EcalSeverityLevelAlgo, EcalSeverityLevelAlgoRcd>()},
-      hcalHelper_{hcal},
-      superClusterErrorFunction_{
-          std::forward<std::unique_ptr<EcalClusterFunctionBaseClass>>(superClusterErrorFunction)},
+      magneticFieldToken_{cc.esConsumes()},
+      caloGeometryToken_{cc.esConsumes()},
+      caloTopologyToken_{cc.esConsumes()},
+      trackerGeometryToken_{cc.esConsumes()},
+      ecalSeveretyLevelAlgoToken_{cc.esConsumes()},
+      ecalPFRechitThresholdsToken_{cc.esConsumes()},
+      hcalHelper_{hcal, std::move(cc)},
       crackCorrectionFunction_{std::forward<std::unique_ptr<EcalClusterFunctionBaseClass>>(crackCorrectionFunction)},
-      regHelper_{reg}
+      regHelper_{reg, cfg_.strategy.useEcalRegression, cfg_.strategy.useCombinationRegression, cc}
 
 {}
 
 void GsfElectronAlgo::checkSetup(const edm::EventSetup& es) {
-  hcalHelper_.checkSetup(es);
   if (cfg_.strategy.useEcalRegression || cfg_.strategy.useCombinationRegression)
     regHelper_.checkSetup(es);
 
-  if (superClusterErrorFunction_) {
-    superClusterErrorFunction_->init(es);
-  }
   if (crackCorrectionFunction_) {
     crackCorrectionFunction_->init(es);
   }
@@ -412,9 +420,6 @@ void GsfElectronAlgo::checkSetup(const edm::EventSetup& es) {
 GsfElectronAlgo::EventData GsfElectronAlgo::beginEvent(edm::Event const& event,
                                                        CaloGeometry const& caloGeometry,
                                                        EcalSeverityLevelAlgo const& ecalSeveretyLevelAlgo) {
-  // prepare access to hcal data
-  hcalHelper_.readEvent(event);
-
   auto const& towers = event.get(cfg_.tokens.hcalTowersTag);
 
   // Isolation algos
@@ -537,6 +542,10 @@ reco::GsfElectronCollection GsfElectronAlgo::completeElectrons(edm::Event const&
   auto const& caloTopology = eventSetup.getData(caloTopologyToken_);
   auto const& trackerGeometry = eventSetup.getData(trackerGeometryToken_);
   auto const& ecalSeveretyLevelAlgo = eventSetup.getData(ecalSeveretyLevelAlgoToken_);
+  auto const& thresholds = eventSetup.getData(ecalPFRechitThresholdsToken_);
+
+  // prepare access to hcal data
+  hcalHelper_.beginEvent(event, eventSetup);
 
   checkSetup(eventSetup);
   auto eventData = beginEvent(event, caloGeometry, ecalSeveretyLevelAlgo);
@@ -586,7 +595,8 @@ reco::GsfElectronCollection GsfElectronAlgo::completeElectrons(edm::Event const&
                    magneticFieldInTesla,
                    hoc,
                    ctfTrackTable.value(),
-                   gsfTrackTable.value());
+                   gsfTrackTable.value(),
+                   thresholds);
 
   }  // loop over tracks
   return electrons;
@@ -719,7 +729,8 @@ void GsfElectronAlgo::createElectron(reco::GsfElectronCollection& electrons,
                                      double magneticFieldInTesla,
                                      const GsfElectronAlgo::HeavyObjectCache* hoc,
                                      egamma::conv::TrackTableView ctfTable,
-                                     egamma::conv::TrackTableView gsfTable) {
+                                     egamma::conv::TrackTableView gsfTable,
+                                     EcalPFRecHitThresholds const& thresholds) {
   // charge ID
   int eleCharge;
   GsfElectron::ChargeInfo eleChargeInfo;
@@ -848,9 +859,10 @@ void GsfElectronAlgo::createElectron(reco::GsfElectronCollection& electrons,
   reco::GsfElectron::ShowerShape showerShape;
   reco::GsfElectron::ShowerShape full5x5_showerShape;
   if (!EcalTools::isHGCalDet((DetId::Detector)region)) {
-    showerShape = calculateShowerShape<false>(electronData.superClusterRef, hcalHelper_, eventData, topology, geometry);
-    full5x5_showerShape =
-        calculateShowerShape<true>(electronData.superClusterRef, hcalHelper_, eventData, topology, geometry);
+    showerShape = calculateShowerShape<false>(
+        electronData.superClusterRef, hcalHelper_, eventData, topology, geometry, thresholds);
+    full5x5_showerShape = calculateShowerShape<true>(
+        electronData.superClusterRef, hcalHelper_, eventData, topology, geometry, thresholds);
   }
 
   //====================================================
@@ -924,7 +936,7 @@ void GsfElectronAlgo::createElectron(reco::GsfElectronCollection& electrons,
                          saturationInfo);
   auto& ele = electrons.back();
   // Will be overwritten later in the case of the regression
-  ele.setCorrectedEcalEnergyError(superClusterErrorFunction_->getValue(*(ele.superCluster()), 0));
+  ele.setCorrectedEcalEnergyError(egamma::ecalClusterEnergyUncertaintyElectronSpecific(*(ele.superCluster())));
   ele.setP4(GsfElectron::P4_FROM_SUPER_CLUSTER, momentum, 0, true);
 
   //====================================================
@@ -963,7 +975,7 @@ void GsfElectronAlgo::createElectron(reco::GsfElectronCollection& electrons,
   // ecal energy
   if (cfg_.strategy.useEcalRegression)  // new
   {
-    regHelper_.applyEcalRegression(ele, eventData.vertices, eventData.barrelRecHits, eventData.endcapRecHits);
+    regHelper_.applyEcalRegression(ele, *eventData.vertices, *eventData.barrelRecHits, *eventData.endcapRecHits);
   } else  // original implementation
   {
     if (!EcalTools::isHGCalDet((DetId::Detector)region)) {
@@ -989,7 +1001,7 @@ void GsfElectronAlgo::createElectron(reco::GsfElectronCollection& electrons,
 
   // momentum
   // Keep the default correction running first. The track momentum error is computed in there
-  if (ele.core()->ecalDrivenSeed() && !unexpectedClassification) {
+  if (cfg_.strategy.useDefaultEnergyCorrection && ele.core()->ecalDrivenSeed() && !unexpectedClassification) {
     if (ele.p4Error(reco::GsfElectron::P4_COMBINATION) != 999.) {
       edm::LogWarning("ElectronMomentumCorrector::correct") << "already done";
     } else {

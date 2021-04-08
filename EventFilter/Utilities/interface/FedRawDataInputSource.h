@@ -32,7 +32,10 @@ struct InputChunk;
 
 namespace evf {
   class FastMonitoringService;
-}
+  namespace FastMonState {
+    enum InputState : short;
+  }
+}  // namespace evf
 
 class FedRawDataInputSource : public edm::RawInputSource {
   friend struct InputFile;
@@ -48,6 +51,8 @@ public:
 protected:
   Next checkNext() override;
   void read(edm::EventPrincipal& eventPrincipal) override;
+  void setMonState(evf::FastMonState::InputState state);
+  void setMonStateSup(evf::FastMonState::InputState state);
 
 private:
   void rewind_() override;
@@ -132,7 +137,7 @@ private:
 
   typedef std::pair<InputFile*, InputChunk*> ReaderInfo;
 
-  uint32 detectedFRDversion_ = 0;
+  uint16_t detectedFRDversion_ = 0;
   std::unique_ptr<InputFile> currentFile_;
   bool chunkIsFree_ = false;
 

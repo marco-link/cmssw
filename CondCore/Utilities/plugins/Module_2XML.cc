@@ -85,6 +85,8 @@ PAYLOAD_2XML_MODULE(pluginUtilities_payload2xml) {
   PAYLOAD_2XML_CLASS(EcalCondTowerObjectContainer<EcalDQMStatusCode>);
   PAYLOAD_2XML_CLASS(EcalFunParams);
   PAYLOAD_2XML_CLASS(EcalLaserAPDPNRatios);
+  PAYLOAD_2XML_CLASS(EcalMustacheSCParameters);
+  PAYLOAD_2XML_CLASS(EcalSCDynamicDPhiParameters);
   PAYLOAD_2XML_CLASS(EcalSRSettings);
   PAYLOAD_2XML_CLASS(EcalSampleMask);
   PAYLOAD_2XML_CLASS(EcalSamplesCorrelation);
@@ -103,6 +105,9 @@ PAYLOAD_2XML_MODULE(pluginUtilities_payload2xml) {
   PAYLOAD_2XML_CLASS(EcalTPGTowerStatus);
   PAYLOAD_2XML_CLASS(EcalTPGWeightGroup);
   PAYLOAD_2XML_CLASS(EcalTPGWeightIdMap);
+  PAYLOAD_2XML_CLASS(EcalTPGOddWeightGroup);
+  PAYLOAD_2XML_CLASS(EcalTPGOddWeightIdMap);
+  PAYLOAD_2XML_CLASS(EcalTPGTPMode);
   PAYLOAD_2XML_CLASS(EcalTimeBiasCorrections);
   PAYLOAD_2XML_CLASS(EcalTimeDependentCorrections);
   PAYLOAD_2XML_CLASS(EcalTimeOffsetConstant);
@@ -180,6 +185,7 @@ PAYLOAD_2XML_MODULE(pluginUtilities_payload2xml) {
   PAYLOAD_2XML_CLASS(L1RPCHwConfig);
   PAYLOAD_2XML_CLASS(L1TGlobalParameters);
   PAYLOAD_2XML_CLASS(L1TGlobalPrescalesVetos);
+  PAYLOAD_2XML_CLASS(L1TGlobalPrescalesVetosFract);
   PAYLOAD_2XML_CLASS(L1TMuonBarrelParams);
   PAYLOAD_2XML_CLASS(L1TMuonEndCapForest);
   PAYLOAD_2XML_CLASS(L1TMuonEndCapParams);
@@ -204,7 +210,6 @@ PAYLOAD_2XML_MODULE(pluginUtilities_payload2xml) {
   PAYLOAD_2XML_CLASS(OOTPileupCorrectionBuffer);
   PAYLOAD_2XML_CLASS(PCaloGeometry);
   PAYLOAD_2XML_CLASS(PGeometricDet);
-  PAYLOAD_2XML_CLASS(PGeometricDetExtra);
   PAYLOAD_2XML_CLASS(PHGCalParameters);
   PAYLOAD_2XML_CLASS(PTrackerParameters);
   PAYLOAD_2XML_CLASS(PerformancePayloadFromBinnedTFormula);

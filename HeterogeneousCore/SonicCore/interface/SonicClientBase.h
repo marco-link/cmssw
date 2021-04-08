@@ -12,23 +12,27 @@
 #include <chrono>
 #include <exception>
 #include <memory>
+#include <optional>
 
 enum class SonicMode { Sync = 1, Async = 2, PseudoAsync = 3 };
 
 class SonicClientBase {
 public:
   //constructor
-  SonicClientBase(const edm::ParameterSet& params);
+  SonicClientBase(const edm::ParameterSet& params, const std::string& debugName, const std::string& clientName);
 
   //destructor
   virtual ~SonicClientBase() = default;
 
-  void setDebugName(const std::string& debugName);
   const std::string& debugName() const { return debugName_; }
   const std::string& clientName() const { return clientName_; }
+  SonicMode mode() const { return mode_; }
 
   //main operation
   virtual void dispatch(edm::WaitingTaskWithArenaHolder holder) { dispatcher_->dispatch(std::move(holder)); }
+
+  //alternate operation when ExternalWork is not used
+  virtual void dispatch() { dispatcher_->dispatch(); }
 
   //helper: does nothing by default
   virtual void reset() {}
@@ -37,9 +41,13 @@ public:
   static void fillBasePSetDescription(edm::ParameterSetDescription& desc, bool allowRetry = true);
 
 protected:
+  void setMode(SonicMode mode);
+
   virtual void evaluate() = 0;
 
   void start(edm::WaitingTaskWithArenaHolder holder);
+
+  void start();
 
   void finish(bool success, std::exception_ptr eptr = std::exception_ptr{});
 
@@ -47,10 +55,10 @@ protected:
   SonicMode mode_;
   std::unique_ptr<SonicDispatcher> dispatcher_;
   unsigned allowedTries_, tries_;
-  edm::WaitingTaskWithArenaHolder holder_;
+  std::optional<edm::WaitingTaskWithArenaHolder> holder_;
 
   //for logging/debugging
-  std::string clientName_, debugName_, fullDebugName_;
+  std::string debugName_, clientName_, fullDebugName_;
   std::chrono::time_point<std::chrono::high_resolution_clock> t0_;
 
   friend class SonicDispatcher;

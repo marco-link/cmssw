@@ -14,9 +14,9 @@ lowPtGsfElectronSeeds = cms.EDProducer(
     EERecHits = cms.InputTag("ecalRecHit","EcalRecHitsEE"),
     rho = cms.InputTag('fixedGridRhoFastjetAllTmp'),
     BeamSpot = cms.InputTag("offlineBeamSpot"),
-    Fitter = cms.string('GsfTrajectoryFitter_forPreId'),
-    Smoother = cms.string('GsfTrajectorySmoother_forPreId'),
-    TTRHBuilder = cms.string('WithAngleAndTemplate'),
+    Fitter = cms.ESInputTag("", 'GsfTrajectoryFitter_forPreId'),
+    Smoother = cms.ESInputTag("", 'GsfTrajectorySmoother_forPreId'),
+    TTRHBuilder = cms.ESInputTag("", 'WithAngleAndTemplate'),
     ModelNames = cms.vstring([
             'unbiased',
             'ptbiased',
@@ -46,5 +46,7 @@ fastSim.toReplaceWith(lowPtGsfElectronSeeds,_fastSim_lowPtGsfElectronSeeds)
 
 # Modifiers for BParking
 from Configuration.Eras.Modifier_bParking_cff import bParking
-bParking.toModify(lowPtGsfElectronSeeds, ModelThresholds = thresholds("VL") )
-bParking.toModify(lowPtGsfElectronSeeds, MinPtThreshold = 0.5)
+bParking.toModify(lowPtGsfElectronSeeds, 
+    ModelThresholds = thresholds("VL"), 
+    MinPtThreshold = 0.5
+)

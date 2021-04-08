@@ -5,6 +5,7 @@ SONIC: Services for Optimized Network Inference on Coprocessors
 ## For analyzers
 
 The `SonicEDProducer` class template extends the basic Stream producer module in CMSSW.
+Similarly, `SonicEDFilter` extends the basic Stream filter module (replace `void produce` with `bool filter` below).
 
 To implement a concrete derived producer class, the following skeleton can be used:
 ```cpp
@@ -14,9 +15,8 @@ To implement a concrete derived producer class, the following skeleton can be us
 class MyProducer : public SonicEDProducer<Client>
 {
 public:
-  explicit MyProducer(edm::ParameterSet const& cfg) : SonicEDProducer<Client>(cfg) {
-    //for debugging
-    setDebugName("MyProducer");
+  explicit MyProducer(edm::ParameterSet const& cfg) : SonicEDProducer<Client>(cfg, "MyProducer") {
+    //do any necessary operations
   }
   void acquire(edm::Event const& iEvent, edm::EventSetup const& iSetup, Input& iInput) override {
     //convert event data to client input format
@@ -51,7 +51,11 @@ These parameters can be prepopulated and validated by the client using `fillDesc
 The `mode` and `allowedTries` parameters are always necessary (example values are shown here, but other values are also allowed).
 These parameters are described in the next section.
 
-An example producer can be found in the [test](./test) folder.
+In addition, there is a `SonicOneEDAnalyzer` class template for user analysis, e.g. to produce simple ROOT files.
+Only `Sync` mode is supported for clients used with One modules,
+but otherwise, the above template can be followed (replace `void produce(edm::Event&` with `void analyze(edm::Event const&` above).
+
+Examples of the producer, filter, and analyzer can be found in the [test](./test) folder.
 
 ## For developers
 
@@ -60,7 +64,7 @@ To add a new communication protocol for SONIC, follow these steps:
 2. Set up the concrete client(s) that use the communication protocol in a new package in the `HeterogeneousCore` subsystem
 3. Add a test producer (see above) to make sure it works
 
-To implement a concrete client, the following skeleton can be used for the `.h` file, with the function implementations in an associated `.cc` file:
+To implement a concrete client, the following skeleton can be used for the `.h` file:
 ```cpp
 #ifndef HeterogeneousCore_MyPackage_MyClient
 #define HeterogeneousCore_MyPackage_MyClient
@@ -70,7 +74,7 @@ To implement a concrete client, the following skeleton can be used for the `.h` 
 
 class MyClient : public SonicClient<Input,Output> {
 public:
-  MyClient(const edm::ParameterSet& params);
+  MyClient(const edm::ParameterSet& params, const std::string& debugName);
 
   static void fillPSetDescription(edm::ParameterSetDescription& iDesc);
 
@@ -79,6 +83,14 @@ protected:
 };
 
 #endif
+```
+
+The concrete client member function implementations, in an associated `.cc` file, should include the following:
+```cpp
+MyClient::MyClient(const edm::ParameterSet& params, const std::string& debugName)
+    : SonicClient(params, debugName, "MyClient") {
+  //do any necessary operations
+}
 ```
 
 The `SonicClient` has three available modes:
